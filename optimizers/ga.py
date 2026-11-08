@@ -7,8 +7,9 @@ class GeneticAlgorithmOptimizer:
         self.fitness_fn = fitness_fn
         self.device = device
 
-    def train(self, selection_fn, crossover_fn, mutation_fn, max_iter=50, patience=10):
-        genomes = torch.rand((self.population, self.dim), device=self.device) * 2 - 1
+    def train(self, selection_fn, crossover_fn, mutation_fn, max_iter=50, patience=10, init_scale=1.0):
+        # Genomes start uniform in [-init_scale, init_scale]^dim.
+        genomes = (torch.rand((self.population, self.dim), device=self.device) * 2 - 1) * init_scale
 
         best_genom = torch.zeros((self.dim, ), device=self.device)
         best_fitness = -float("inf")

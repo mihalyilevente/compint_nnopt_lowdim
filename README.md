@@ -57,6 +57,34 @@ The original `data.ipynb` uses Kaggle downloads and a Bash cleanup cell. Its imp
 are installed for compatibility, but it is unnecessary for this official-source path.
 The Bash cleanup cell deletes non-CSV files and is not portable to native PowerShell.
 
+## Running experiments
+
+`run.py` runs experiments from the command line; every run gets its own folder under
+`out/` (never overwritten) with `config.json` (all arguments, seeds, git commit, package
+versions, data hashes), `metrics.csv` (per epoch or per fitness call), `summary.json`
+(final metrics, time, evaluations, peak GPU memory, status) and the final weights.
+
+```powershell
+# full-parameter Adam baseline (784-200-200-10 MLP on MNIST)
+.\.venv\Scripts\python.exe run.py --mode full --optimizer adam
+# Adam in the subspace, several d and seeds (every combination is one run)
+.\.venv\Scripts\python.exe run.py --optimizer adam --dims 10 25 50 100 250 500 1000 --seeds 0 1 2
+# population methods share the same subspace for the same seed
+.\.venv\Scripts\python.exe run.py --optimizer pso --dims 50 --population 256 --max-iter 100
+.\.venv\Scripts\python.exe run.py --optimizer ga --dims 50 --population 256 --max-iter 100
+# collect results into out/summary.csv and print mean/std per setting
+.\.venv\Scripts\python.exe scripts/summarize_runs.py
+```
+
+Seeds: `--seeds s` sets model init `s`, projection `s+10000` and optimiser `s+20000`;
+the validation split (`--split-seed`, 10% of the official training set, stratified) is
+fixed across runs. Early stopping, LR scheduling and comparisons use validation data;
+the official test set is evaluated only with `--eval-test`. Population methods use a
+fixed `--fitness-samples` training subset and negative cross-entropy fitness by default
+(`--fitness accuracy` for the original objective). `--init-scale` sets the initial z
+range and needs tuning: projection columns now have unit norm. Run `python run.py -h`
+for every option and `python -m unittest discover -s tests -v` for the tests.
+
 ## Development and execution
 
 ```powershell

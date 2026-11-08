@@ -7,9 +7,10 @@ class ParticleSwarmOptimizer:
         self.fitness_fn = fitness_fn
         self.device = device
 
-    def train(self, w=0.7, cp=1.5, cg=1.5, max_iter=50, patience=10):
-        positions = torch.rand((self.population, self.dim), device=self.device) * 2 - 1
-        velocities = torch.rand((self.population, self.dim), device=self.device) * 4 - 2
+    def train(self, w=0.7, cp=1.5, cg=1.5, max_iter=50, patience=10, init_scale=1.0):
+        # Positions start uniform in [-init_scale, init_scale]^dim, velocities in twice that range.
+        positions = (torch.rand((self.population, self.dim), device=self.device) * 2 - 1) * init_scale
+        velocities = (torch.rand((self.population, self.dim), device=self.device) * 4 - 2) * init_scale
 
         best_positions = positions.clone()
         best_values = self.fitness_fn(positions).to(self.device)
