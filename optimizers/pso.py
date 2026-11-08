@@ -14,9 +14,11 @@ class ParticleSwarmOptimizer:
         best_positions = positions.clone()
         best_values = self.fitness_fn(positions).to(self.device)
 
-        best_idx = torch.argmax(best_values)
-        global_best_position = best_positions[best_idx.item()]
-        global_best_value = best_values[best_idx.item()]
+        # Global best is an independent snapshot (clone / Python float), never a view
+        # into best_positions / best_values, which are updated in place below.
+        best_idx = torch.argmax(best_values).item()
+        global_best_position = best_positions[best_idx].clone()
+        global_best_value = best_values[best_idx].item()
 
         fitness_history = [global_best_value]
 
@@ -32,20 +34,21 @@ class ParticleSwarmOptimizer:
 
             # Calculate fitness
             fitness = self.fitness_fn(positions).to(self.device)
-            
-            # Update best records
+
+            # Update personal best records
             mask = fitness > best_values
             best_positions[mask, :] = positions[mask, :]
             best_values[mask] = fitness[mask]
 
-            if mask.any():
-                best_idx = torch.argmax(best_values[mask])
-                if global_best_value < best_values[mask][best_idx.item()]:
-                    global_best_position = best_positions[mask][best_idx.item()]
-                    global_best_value = best_values[mask][best_idx.item()]
-                    patience_counter = 0
-                else:
-                    patience_counter += 1
+            # Update global best; every iteration without a global improvement counts
+            # toward patience, including iterations where no particle improved.
+            best_idx = torch.argmax(best_values).item()
+            if best_values[best_idx].item() > global_best_value:
+                global_best_position = best_positions[best_idx].clone()
+                global_best_value = best_values[best_idx].item()
+                patience_counter = 0
+            else:
+                patience_counter += 1
 
             fitness_history.append(global_best_value)
 

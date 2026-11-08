@@ -9,9 +9,9 @@ class GeneticAlgorithmOptimizer:
 
     def train(self, selection_fn, crossover_fn, mutation_fn, max_iter=50, patience=10):
         genomes = torch.rand((self.population, self.dim), device=self.device) * 2 - 1
-                
+
         best_genom = torch.zeros((self.dim, ), device=self.device)
-        best_fitness = -torch.inf
+        best_fitness = -float("inf")
 
         patience_counter = 0
         fitness_history = []
@@ -19,19 +19,22 @@ class GeneticAlgorithmOptimizer:
         for i in range(max_iter):
             # evaluate fitness
             fitness = self.fitness_fn(genomes).to(self.device)
-            
+
             best_idx = torch.argmax(fitness).item()
-            if best_fitness < fitness[best_idx]:
-                best_genom = genomes[best_idx]
-                best_fitness = fitness[best_idx]
+            if fitness[best_idx].item() > best_fitness:
+                # Clone: crossover/mutation callbacks may modify genomes in place.
+                best_genom = genomes[best_idx].clone()
+                best_fitness = fitness[best_idx].item()
                 patience_counter = 0
             else:
                 patience_counter += 1
-            
+
             fitness_history.append(best_fitness)
 
             # select parents
             parents = selection_fn(fitness)
+            if parents.shape[0] != genomes.shape[0]:
+                raise ValueError(f"selection_fn returned {parents.shape[0]} parents for population {genomes.shape[0]}")
 
             # crossover
             genomes = crossover_fn(genomes, parents)

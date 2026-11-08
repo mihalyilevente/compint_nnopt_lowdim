@@ -1,3 +1,5 @@
+import copy
+
 import torch.nn as nn
 import torch
 
@@ -82,7 +84,8 @@ def train_model(model, device, train_loader, val_loader, criterion, optimizer, s
         # Check for improvement.
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            best_model_wts = model.state_dict()
+            # state_dict() returns live references; snapshot it so later steps don't overwrite it.
+            best_model_wts = copy.deepcopy(model.state_dict())
             patience_counter = 0
         else:
             patience_counter += 1
