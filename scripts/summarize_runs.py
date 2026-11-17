@@ -18,9 +18,11 @@ def setting_label(args):
     """Short label of the hyperparameters that distinguish runs of one optimiser."""
     if args["optimizer"] == "adam":
         return f"lr={args['lr']}"
-    label = f"pop={args['population']} init={args['init_scale']} fit={args['fitness']}"
+    init = f"norm={args['init_norm']}" if args.get("init_norm") is not None else args["init_scale"]
+    label = f"pop={args['population']} init={init} fit={args['fitness']}"
     if args["optimizer"] == "ga":
-        label += f" sigma={args['ga_sigma']} sel={args['ga_selection']}"
+        sigma = f"norm={args['ga_sigma_norm']}" if args.get("ga_sigma_norm") is not None else args["ga_sigma"]
+        label += f" sigma={sigma} sel={args['ga_selection']}"
     if args["optimizer"] == "pso":
         label += f" w={args['pso_w']} cp={args['pso_cp']} cg={args['pso_cg']}"
     return label

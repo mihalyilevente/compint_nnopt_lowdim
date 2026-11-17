@@ -81,6 +81,9 @@ def parse_args(argv=None):
     g.add_argument("--max-iter", type=int, default=100)
     g.add_argument("--pop-patience", type=int, default=15)
     g.add_argument("--init-scale", type=float, default=1.0, help="initial z uniform in [-s, s]^d")
+    g.add_argument("--init-norm", type=float, default=None,
+                   help="expected initial ||z|| (= distance from theta0, A has unit columns); "
+                        "overrides --init-scale with s = R*sqrt(3/d), so the spread is the same for every d")
     g.add_argument("--fitness", choices=["neg_ce", "accuracy"], default="neg_ce")
     g.add_argument("--fitness-samples", type=int, default=10000, help="fixed training subset used for fitness")
     g.add_argument("--fitness-batch", type=int, default=2000)
@@ -91,7 +94,9 @@ def parse_args(argv=None):
     g.add_argument("--ga-selection", choices=["tournament", "truncation"], default="tournament")
     g.add_argument("--ga-tournament", type=int, default=5)
     g.add_argument("--ga-keep-frac", type=float, default=0.5)
-    g.add_argument("--ga-sigma", type=float, default=0.1)
+    g.add_argument("--ga-sigma", type=float, default=0.1, help="per-coordinate mutation std")
+    g.add_argument("--ga-sigma-norm", type=float, default=None,
+                   help="expected mutation step length ||dz||; overrides --ga-sigma with S/sqrt(d)")
     return p.parse_args(argv)
 
 
@@ -219,6 +224,14 @@ class LoggedFitness:
         return values
 
 
+def effective_scales(args, dim):
+    """Per-coordinate init range and GA sigma; *-norm options keep lengths fixed across d."""
+    # z ~ U[-s, s]^d has E||z||^2 = d s^2 / 3; Gaussian mutation has E||dz||^2 = d sigma^2.
+    init_scale = args.init_scale if args.init_norm is None else args.init_norm * (3 / dim) ** 0.5
+    ga_sigma = args.ga_sigma if args.ga_sigma_norm is None else args.ga_sigma_norm / dim ** 0.5
+    return init_scale, ga_sigma
+
+
 def run_population(model, args, dim, data, device, log, seeds, t0):
     if args.optimizer == "ga" and args.population % 2:
         raise ValueError("GA with arithmetic crossover needs an even --population")
@@ -229,11 +242,12 @@ def run_population(model, args, dim, data, device, log, seeds, t0):
     fitness = LoggedFitness(FitnessFunction(model, fit_loader, args.chunk_size, device, metric=args.fitness),
                             log, n, t0)
 
+    init_scale, ga_sigma = effective_scales(args, dim)
     torch.manual_seed(seeds["opt"])
     if args.optimizer == "pso":
         z, _ = ParticleSwarmOptimizer(args.population, dim, fitness, device).train(
             w=args.pso_w, cp=args.pso_cp, cg=args.pso_cg, max_iter=args.max_iter,
-            patience=args.pop_patience, init_scale=args.init_scale)
+            patience=args.pop_patience, init_scale=init_scale)
     else:
         if args.ga_selection == "tournament":
             selection = lambda f: tournament_selection(f, device, args.ga_tournament)
@@ -241,14 +255,15 @@ def run_population(model, args, dim, data, device, log, seeds, t0):
             selection = lambda f: truncation_selection(f, args.ga_keep_frac)
         z, _ = GeneticAlgorithmOptimizer(args.population, dim, fitness, device).train(
             selection, lambda g, p: arithmetic_crossover(g, p, device),
-            lambda g: gaussian_mutation(g, device, args.ga_sigma),
-            max_iter=args.max_iter, patience=args.pop_patience, init_scale=args.init_scale)
+            lambda g: gaussian_mutation(g, device, ga_sigma),
+            max_iter=args.max_iter, patience=args.pop_patience, init_scale=init_scale)
 
     with torch.no_grad():
         model.lower_weights.copy_(z.to(model.lower_weights.device))
     fit_loss, fit_acc = _validate(model, device, fit_loader, nn.CrossEntropyLoss())
     return dict(iterations=fitness.calls, candidate_evals=fitness.evals, examples_processed=fitness.evals * n,
-                best_fitness=fitness.best, fitness_samples=n, fitness_subset_loss=fit_loss,
+                best_fitness=fitness.best, fitness_samples=n, init_scale_effective=init_scale,
+                ga_sigma_effective=ga_sigma if args.optimizer == "ga" else None, fitness_subset_loss=fit_loss,
                 fitness_subset_acc=fit_acc)
 
 

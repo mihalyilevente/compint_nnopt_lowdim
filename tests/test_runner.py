@@ -79,9 +79,36 @@ class RunnerEndToEnd(unittest.TestCase):
                                     "--ga-selection", "truncation")
         self.assertEqual(summaries[0]["candidate_evals"], 8)
 
+    def test_norm_options_recorded(self):
+        _, summaries = self.run_cli("--optimizer", "ga", "--dims", "12", "--population", "4", "--max-iter", "1",
+                                    "--init-norm", "2", "--ga-sigma-norm", "6")
+        self.assertAlmostEqual(summaries[0]["init_scale_effective"], 1.0)
+        self.assertAlmostEqual(summaries[0]["ga_sigma_effective"], 6 / 12 ** 0.5)
+
     def test_same_seed_is_reproducible(self):
         _, a = self.run_cli("--optimizer", "adam", "--dims", "4", "--epochs", "2", "--seeds", "3", "3")
         self.assertEqual(a[0]["val_loss"], a[1]["val_loss"])
+
+
+class NormalisedScales(unittest.TestCase):
+    def args(self, *extra):
+        return run.parse_args(list(extra))
+
+    def test_defaults_keep_per_coordinate_values(self):
+        self.assertEqual(run.effective_scales(self.args("--init-scale", "3", "--ga-sigma", "1"), 25), (3.0, 1.0))
+
+    def test_norm_options_match_d25_settings_and_fix_lengths(self):
+        args = self.args("--init-norm", str(3 * (25 / 3) ** 0.5), "--ga-sigma-norm", "5")
+        scale, sigma = run.effective_scales(args, 25)
+        self.assertAlmostEqual(scale, 3.0)
+        self.assertAlmostEqual(sigma, 1.0)
+        torch.manual_seed(0)
+        for dim in (25, 500):
+            scale, sigma = run.effective_scales(args, dim)
+            z = (torch.rand(2000, dim) * 2 - 1) * scale
+            dz = torch.randn(2000, dim) * sigma
+            self.assertAlmostEqual(z.norm(dim=1).pow(2).mean().sqrt().item(), args.init_norm, delta=0.2)
+            self.assertAlmostEqual(dz.norm(dim=1).pow(2).mean().sqrt().item(), 5.0, delta=0.1)
 
 
 class NegCrossEntropyFitness(unittest.TestCase):
