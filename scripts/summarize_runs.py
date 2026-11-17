@@ -9,9 +9,21 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-COLUMNS = ["run", "status", "dataset", "model", "mode", "dim", "optimizer", "lr", "seed", "val_acc", "val_loss",
+COLUMNS = ["run", "status", "dataset", "model", "mode", "dim", "optimizer", "setting", "seed", "val_acc", "val_loss",
            "test_acc", "test_loss", "epochs_run", "iterations", "candidate_evals", "examples_processed",
            "elapsed_s", "peak_gpu_mem_mb", "git_commit", "git_dirty"]
+
+
+def setting_label(args):
+    """Short label of the hyperparameters that distinguish runs of one optimiser."""
+    if args["optimizer"] == "adam":
+        return f"lr={args['lr']}"
+    label = f"pop={args['population']} init={args['init_scale']} fit={args['fitness']}"
+    if args["optimizer"] == "ga":
+        label += f" sigma={args['ga_sigma']} sel={args['ga_selection']}"
+    if args["optimizer"] == "pso":
+        label += f" w={args['pso_w']} cp={args['pso_cp']} cg={args['pso_cg']}"
+    return label
 
 
 def collect(out):
@@ -26,6 +38,7 @@ def collect(out):
         rows.append(dict(summary, run=config["run"], dataset=args["dataset"], model=args["model"],
                          mode=args["mode"], dim=config["dim"], optimizer=args["optimizer"],
                          lr=args["lr"] if args["optimizer"] == "adam" else None, seed=config["seed"],
+                         setting=setting_label(args),
                          git_commit=env.get("git_commit"), git_dirty=env.get("git_dirty")))
     frame = pd.DataFrame(rows)
     return frame.reindex(columns=[c for c in COLUMNS if c in frame.columns] + [c for c in frame.columns if c not in COLUMNS and c != "traceback"])
@@ -47,10 +60,9 @@ def main():
     if done.empty:
         return
     done["dim"] = done["dim"].fillna(-1).astype(int)  # -1 = full parameter space
-    done["lr"] = done["lr"].fillna("-")  # population methods have no learning rate
-    table = (done.groupby(["dataset", "model", "optimizer", "dim", "lr"])["val_acc"]
+    table = (done.groupby(["dataset", "model", "optimizer", "setting", "dim"])["val_acc"]
                  .agg(["count", "mean", "std", "min", "max"]).round(4))
-    with pd.option_context("display.max_rows", None, "display.width", 120):
+    with pd.option_context("display.max_rows", None, "display.width", 200):
         print(table)
 
 
