@@ -25,7 +25,7 @@ def setting_label(args):
         label += f" sigma={sigma} sel={args['ga_selection']}"
     if args["optimizer"] == "pso":
         label += f" w={args['pso_w']} cp={args['pso_cp']} cg={args['pso_cg']}"
-    return label
+    return label + f" it={args['max_iter']}"
 
 
 def collect(out):
@@ -40,7 +40,7 @@ def collect(out):
         rows.append(dict(summary, run=config["run"], dataset=args["dataset"], model=args["model"],
                          mode=args["mode"], dim=config["dim"], optimizer=args["optimizer"],
                          lr=args["lr"] if args["optimizer"] == "adam" else None, seed=config["seed"],
-                         setting=setting_label(args),
+                         setting=setting_label(args), run_dir=str(summary_path.parent),
                          git_commit=env.get("git_commit"), git_dirty=env.get("git_dirty")))
     frame = pd.DataFrame(rows)
     return frame.reindex(columns=[c for c in COLUMNS if c in frame.columns] + [c for c in frame.columns if c not in COLUMNS and c != "traceback"])

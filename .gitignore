@@ -3,3 +3,4 @@ out/**
 data/**
 .venv/
 .ipynb_checkpoints/
+figures/
