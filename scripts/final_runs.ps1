@@ -6,13 +6,16 @@
 #
 # Usage (repository root):
 #   powershell -ExecutionPolicy Bypass -File scripts\final_runs.ps1                 # everything
-#   powershell -ExecutionPolicy Bypass -File scripts\final_runs.ps1 -Dims 25,100    # a subset
+#   powershell -ExecutionPolicy Bypass -File scripts\final_runs.ps1 -Dims "25,100"  # a subset
 #   ... -SkipFull to skip the full-network baseline when resuming
 param(
-    [int[]]$Dims = @(25, 100, 250, 500, 1000),
+    [string]$Dims = "25,100,250,500,1000",
     [switch]$SkipFull
 )
 $ErrorActionPreference = "Stop"
+# A string, not [int[]]: with -File, "25,100,250" arrives as one token and would become 25100250.
+$dimList = @($Dims -split "[,\s]+" | Where-Object { $_ } | ForEach-Object { [int]$_ })
+Write-Host "Dimensions: $($dimList -join ', ')" -ForegroundColor Cyan
 $py = ".\.venv\Scripts\python.exe"
 $out = "out_final"
 $seeds = @("--seeds", "0", "1", "2")
@@ -21,7 +24,7 @@ $pop = @("--population", "256", "--init-norm", "8.66", "--pop-patience", "100000
 if (-not $SkipFull) {
     & $py run.py --mode full --optimizer adam --epochs 30 --eval-test --out $out @seeds
 }
-foreach ($d in $Dims) {
+foreach ($d in $dimList) {
     Write-Host "===== d = $d =====" -ForegroundColor Cyan
     & $py run.py --optimizer adam --lr 0.03 --epochs 30 --dims $d --eval-test --out $out @seeds
     & $py run.py --optimizer pso --dims $d --max-iter 1000 @pop
