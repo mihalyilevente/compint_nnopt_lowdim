@@ -23,6 +23,8 @@ def setting_label(args):
     if args["optimizer"] == "ga":
         sigma = f"norm={args['ga_sigma_norm']}" if args.get("ga_sigma_norm") is not None else args["ga_sigma"]
         label += f" sigma={sigma} sel={args['ga_selection']}"
+    if args["optimizer"] == "mpa":
+        label += f" fads={args.get('mpa_fads')} P={args.get('mpa_p')}"
     if args["optimizer"] == "pso":
         label += f" w={args['pso_w']} cp={args['pso_cp']} cg={args['pso_cg']}"
     return label + f" it={args['max_iter']}"

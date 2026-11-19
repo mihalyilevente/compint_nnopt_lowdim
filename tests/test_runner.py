@@ -79,6 +79,14 @@ class RunnerEndToEnd(unittest.TestCase):
                                     "--ga-selection", "truncation")
         self.assertEqual(summaries[0]["candidate_evals"], 8)
 
+    def test_gwo(self):
+        _, gwo = self.run_cli("--optimizer", "gwo", "--dims", "4", "--population", "4", "--max-iter", "2")
+        self.assertEqual(gwo[0]["candidate_evals"], 12)  # initial + 2 iterations
+
+    def test_mpa(self):
+        _, mpa = self.run_cli("--optimizer", "mpa", "--dims", "4", "--population", "4", "--max-iter", "2")
+        self.assertEqual(mpa[0]["candidate_evals"], 16)  # two calls per iteration
+
     def test_norm_options_recorded(self):
         _, summaries = self.run_cli("--optimizer", "ga", "--dims", "12", "--population", "4", "--max-iter", "1",
                                     "--init-norm", "2", "--ga-sigma-norm", "6")

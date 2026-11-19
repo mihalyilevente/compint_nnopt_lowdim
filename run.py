@@ -36,6 +36,8 @@ from models.lenet5 import LeNet5
 from models.mnist_mlp import MNIST_MLP
 from models.vector_mlp import VectorMLP
 from optimizers.ga import GeneticAlgorithmOptimizer
+from optimizers.gwo import GreyWolfOptimizer
+from optimizers.mpa import MarinePredatorsOptimizer
 from optimizers.pso import ParticleSwarmOptimizer
 from utils.data_split import stratified_split_indices
 from utils.fitness_function import FitnessFunction
@@ -60,7 +62,7 @@ def parse_args(argv=None):
     g.add_argument("--hidden", type=int, nargs="+", default=[200, 200], help="MLP hidden sizes")
     g.add_argument("--mode", choices=["subspace", "full"], default="subspace")
     g.add_argument("--dims", type=int, nargs="+", default=[100], help="subspace dimensions d")
-    g.add_argument("--optimizer", choices=["adam", "pso", "ga"], default="adam")
+    g.add_argument("--optimizer", choices=["adam", "pso", "ga", "gwo", "mpa"], default="adam")
     g.add_argument("--seeds", type=int, nargs="+", default=[0])
     g.add_argument("--split-seed", type=int, default=0, help="validation split seed (kept fixed across runs)")
     g.add_argument("--val-frac", type=float, default=0.1)
@@ -76,7 +78,7 @@ def parse_args(argv=None):
     g.add_argument("--batch-size", type=int, default=128)
     g.add_argument("--patience", type=int, default=5, help="early-stopping patience in epochs")
 
-    g = p.add_argument_group("population methods (pso, ga)")
+    g = p.add_argument_group("population methods (pso, ga, gwo, mpa)")
     g.add_argument("--population", type=int, default=256)
     g.add_argument("--max-iter", type=int, default=100)
     g.add_argument("--pop-patience", type=int, default=15)
@@ -95,6 +97,8 @@ def parse_args(argv=None):
     g.add_argument("--ga-tournament", type=int, default=5)
     g.add_argument("--ga-keep-frac", type=float, default=0.5)
     g.add_argument("--ga-sigma", type=float, default=0.1, help="per-coordinate mutation std")
+    g.add_argument("--mpa-fads", type=float, default=0.2, help="MPA FADs effect probability")
+    g.add_argument("--mpa-p", type=float, default=0.5, help="MPA step-size constant P")
     g.add_argument("--ga-sigma-norm", type=float, default=None,
                    help="expected mutation step length ||dz||; overrides --ga-sigma with S/sqrt(d)")
     return p.parse_args(argv)
@@ -248,6 +252,13 @@ def run_population(model, args, dim, data, device, log, seeds, t0):
         z, _ = ParticleSwarmOptimizer(args.population, dim, fitness, device).train(
             w=args.pso_w, cp=args.pso_cp, cg=args.pso_cg, max_iter=args.max_iter,
             patience=args.pop_patience, init_scale=init_scale)
+    elif args.optimizer == "gwo":
+        z, _ = GreyWolfOptimizer(args.population, dim, fitness, device).train(
+            max_iter=args.max_iter, patience=args.pop_patience, init_scale=init_scale)
+    elif args.optimizer == "mpa":
+        z, _ = MarinePredatorsOptimizer(args.population, dim, fitness, device).train(
+            max_iter=args.max_iter, patience=args.pop_patience, init_scale=init_scale,
+            fads=args.mpa_fads, p=args.mpa_p)
     else:
         if args.ga_selection == "tournament":
             selection = lambda f: tournament_selection(f, device, args.ga_tournament)
