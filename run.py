@@ -71,6 +71,8 @@ def parse_args(argv=None):
     g.add_argument("--data-root", type=Path, default=ROOT / "data")
     g.add_argument("--out", type=Path, default=ROOT / "out")
     g.add_argument("--eval-batch", type=int, default=2048)
+    g.add_argument("--skip-completed", action="store_true",
+                   help="skip (d, seed) runs that already completed in --out with identical settings")
 
     g = p.add_argument_group("adam")
     g.add_argument("--epochs", type=int, default=20)
@@ -279,6 +281,32 @@ def run_population(model, args, dim, data, device, log, seeds, t0):
 
 
 # ---------------------------------------------------------------- one run
+# Arguments that only choose which runs to start, not what a run computes.
+RUN_SELECTION_ARGS = {"dims", "seeds", "out", "skip_completed"}
+
+
+def args_record(args):
+    return {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}
+
+
+def run_key(args_dict, dim, seed):
+    settings = {k: v for k, v in args_dict.items() if k not in RUN_SELECTION_ARGS}
+    return json.dumps(dict(settings, dim=dim, seed=seed), sort_keys=True, default=str)
+
+
+def completed_run_keys(out):
+    keys = set()
+    for summary_path in Path(out).glob("*/summary.json"):
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            config = json.loads(summary_path.with_name("config.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if summary.get("status") == "completed":
+            keys.add(run_key(config["args"], config["dim"], config["seed"]))
+    return keys
+
+
 def make_run_dir(out, tag):
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     for k in range(1000):
@@ -299,7 +327,7 @@ def run_one(args, dim, seed, data, env):
     print(f"=== {run_dir.name}", flush=True)
 
     config = dict(run=run_dir.name, dim=dim, seed=seed, seeds=seeds,
-                  args={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
+                  args=args_record(args),
                   data=data["info"], environment=env)
     write_json(run_dir / "config.json", config)
     summary = dict(status="running", started=datetime.now().isoformat(timespec="seconds"))
@@ -360,7 +388,15 @@ def main(argv=None):
     data, env = load_data(args), environment()
     if env["git_dirty"]:
         print("warning: uncommitted changes to tracked files; recorded as git_dirty=true", flush=True)
-    results = [run_one(args, dim, seed, data, env) for dim in dims for seed in args.seeds]
+    done = completed_run_keys(args.out) if args.skip_completed else set()
+    results = []
+    for dim in dims:
+        for seed in args.seeds:
+            if run_key(args_record(args), dim, seed) in done:
+                print(f"skip: d={dim} seed={seed} {args.optimizer} already completed in {args.out}", flush=True)
+                results.append(True)
+                continue
+            results.append(run_one(args, dim, seed, data, env))
     print(f"{sum(results)}/{len(results)} runs completed; results in {args.out}", flush=True)
     return 0 if all(results) else 1
 

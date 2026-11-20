@@ -7,7 +7,8 @@
 # Usage (repository root):
 #   powershell -ExecutionPolicy Bypass -File scripts\final_runs.ps1                 # everything
 #   powershell -ExecutionPolicy Bypass -File scripts\final_runs.ps1 -Dims "25,100"  # a subset
-#   ... -SkipFull to skip the full-network baseline when resuming
+#   ... -SkipFull to skip the full-network baseline
+# Interrupted? Run the same command again: completed runs are skipped (--skip-completed).
 param(
     [string]$Dims = "25,100,250,500,1000",
     [switch]$SkipFull
@@ -18,7 +19,7 @@ $dimList = @($Dims -split "[,\s]+" | Where-Object { $_ } | ForEach-Object { [int
 Write-Host "Dimensions: $($dimList -join ', ')" -ForegroundColor Cyan
 $py = ".\.venv\Scripts\python.exe"
 $out = "out_final"
-$seeds = @("--seeds", "0", "1", "2")
+$seeds = @("--seeds", "0", "1", "2", "--skip-completed")
 $pop = @("--population", "256", "--init-norm", "8.66", "--pop-patience", "100000", "--eval-test", "--out", $out) + $seeds
 
 if (-not $SkipFull) {

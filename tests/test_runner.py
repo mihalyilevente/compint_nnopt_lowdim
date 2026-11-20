@@ -93,6 +93,14 @@ class RunnerEndToEnd(unittest.TestCase):
         self.assertAlmostEqual(summaries[0]["init_scale_effective"], 1.0)
         self.assertAlmostEqual(summaries[0]["ga_sigma_effective"], 6 / 12 ** 0.5)
 
+    def test_skip_completed(self):
+        runs, _ = self.run_cli("--optimizer", "adam", "--dims", "4", "--epochs", "1", "--skip-completed")
+        self.assertEqual(len(runs), 1)
+        runs, _ = self.run_cli("--optimizer", "adam", "--dims", "4", "8", "--epochs", "1", "--skip-completed")
+        self.assertEqual(len(runs), 2)  # d=4 skipped, only d=8 added
+        runs, _ = self.run_cli("--optimizer", "adam", "--dims", "4", "--epochs", "2", "--skip-completed")
+        self.assertEqual(len(runs), 3)  # different settings are not skipped
+
     def test_same_seed_is_reproducible(self):
         _, a = self.run_cli("--optimizer", "adam", "--dims", "4", "--epochs", "2", "--seeds", "3", "3")
         self.assertEqual(a[0]["val_loss"], a[1]["val_loss"])
